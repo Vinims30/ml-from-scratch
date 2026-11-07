@@ -1,0 +1,24 @@
+# Ambiente virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Testes
+.pytest_cache/
+.coverage
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dados (baixar via instruções no README)
+data/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store

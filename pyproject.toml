@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlscratch"
+version = "0.0.1"
+description = "Algoritmos de Machine Learning implementados do zero em NumPy e comparados com scikit-learn/PyTorch."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Vinicius Santos" }]
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+dev = ["scikit-learn", "pytest", "matplotlib", "jupyter"]
+
+[tool.setuptools.packages.find]
+include = ["mlscratch*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
