@@ -1,9 +1,20 @@
-"""Distâncias par-a-par (Fase 1, Semana 1, Sessão 3).
+import numpy as np
 
-A implementar:
-- euclidean_two_loops(A, B)
-- euclidean_one_loop(A, B)
-- euclidean_vectorized(A, B)  # ||a-b||² = ||a||² + ||b||² - 2aᵀb, com np.maximum(D2, 0)
+def euclidean_two_loops(A, B):
+    D = np.zeros((A.shape[0], B.shape[0]))
+    for i, linha in enumerate(A):
+        for j, linhaj in enumerate(B):
+            D[i,j] = np.sqrt(np.sum((linha - linhaj) **2))
+    return D
 
-Paridade: sklearn.metrics.pairwise_distances
-"""
+def euclidean_one_loop(A, B):
+    D = np.zeros((A.shape[0], B.shape[0]))
+    for i, linha in enumerate(A):
+        D[i] = np.sqrt(np.sum((linha - B) ** 2, axis=1))
+    return D
+
+def euclidean_vectorized(A, B):
+    D2 =  np.sum(A ** 2, axis=1).reshape(-1,1) + (np.sum(B ** 2,axis=1)  - 2 *(A @ B.T))
+    D2 = np.maximum(D2,0)
+    D = np.sqrt(D2)
+    return D
