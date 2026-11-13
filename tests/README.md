@@ -1,7 +1,7 @@
 # Testes
 
 Cada módulo de `mlscratch/` tem um arquivo `test_<módulo>.py` que compara a implementação
-do zero com a do scikit-learn.
+do zero com a de referência: scikit-learn, ou `scipy.special` no caso de `numerics`.
 
 ## Como rodar
 
@@ -38,7 +38,7 @@ embaralhamento diferente), testamos propriedades em vez de valores.
 | Arquivo | Testes | Status |
 | --- | --- | --- |
 | `test_distances.py` | 22 | Passando |
-| `test_numerics.py` | — | Aguardando implementação |
+| `test_numerics.py` | 23 | Passando |
 | `test_preprocessing.py` | — | Aguardando implementação |
 | `test_model_selection.py` | — | Aguardando implementação |
 | `test_metrics.py` | — | Aguardando implementação |

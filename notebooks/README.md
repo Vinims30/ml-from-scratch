@@ -16,9 +16,9 @@ jupyter lab
 | [01_arrays_views_indexacao](fase1/01_arrays_views_indexacao.ipynb) | `shape`, `dtype`, views vs. cópias, indexação booleana e fancy indexing, one-hot | Concluído |
 | [02_broadcasting](fase1/02_broadcasting.ipynb) | Regras de broadcasting, z-score por coluna, `keepdims`, diferenças par-a-par | Concluído |
 | [03_agregacoes_distancias](fase1/03_agregacoes_distancias.ipynb) | Agregações com `axis`, `argsort`, `bincount`, `einsum`, distância euclidiana em três versões | Concluído |
-| [04_linalg](fase1/04_linalg.ipynb) | `solve` vs. `inv` vs. `lstsq`, número de condição, colinearidade | Pendente |
-| [05_estabilidade_numerica](fase1/05_estabilidade_numerica.ipynb) | `default_rng`, log-sum-exp, softmax e sigmoid estáveis | Pendente |
-| [06_benchmark_distancias](fase1/06_benchmark_distancias.ipynb) | Paridade, `timeit` e gráfico log-log das três distâncias vs. scikit-learn | Faltam as conclusões |
+| [04_linalg](fase1/04_linalg.ipynb) | `solve` vs. `inv` vs. `lstsq`, número de condição, colinearidade | Concluído |
+| [05_estabilidade_numerica](fase1/05_estabilidade_numerica.ipynb) | `default_rng`, log-sum-exp, softmax e sigmoid estáveis | Concluído |
+| [06_benchmark_distancias](fase1/06_benchmark_distancias.ipynb) | Paridade, `timeit` e gráfico log-log das três distâncias vs. scikit-learn | Concluído |
 
 ## Convenções
 

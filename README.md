@@ -28,7 +28,7 @@ Toda implementação é comparada em quatro pontos:
 ### Fase 1: pacote `mlscratch` v0.1
 
 - [x] Distâncias euclidianas par-a-par (dois loops, um loop, vetorizada) + testes + benchmark
-- [ ] Funções numericamente estáveis (softmax, log-sum-exp, sigmoid)
+- [x] Funções numericamente estáveis (softmax, log-softmax, log-sum-exp, sigmoid) + testes
 - [ ] Pré-processamento (`StandardScaler`, `MinMaxScaler`, `OneHotEncoder`)
 - [ ] Divisão de dados (`train_test_split`, `KFold`, `StratifiedKFold`)
 - [ ] Métricas de regressão e classificação (incluindo log loss e ROC-AUC)
@@ -73,16 +73,27 @@ Os testes comparam cada implementação com a do scikit-learn. Veja [tests/READM
 
 ### Distância euclidiana par-a-par (n = m = 2000, d = 50)
 
-| Implementação | Tempo (mediana) | Speedup vs. dois loops |
-| --- | --- | --- |
-| Dois loops | ~14,7 s | 1× |
-| Um loop | ~380 ms | ~39× |
-| Vetorizada | ~43 ms | ~340× |
-| scikit-learn | ~38 ms | ~385× |
+| Implementação | n = 100 | n = 500 | n = 2000 | Speedup vs. dois loops (n = 2000) |
+| --- | --- | --- | --- | --- |
+| Dois loops | 38,2 ms | 890,6 ms | 14,9 s | 1× |
+| Um loop | 1,6 ms | 24,8 ms | 384,3 ms | 38,7× |
+| Vetorizada | 0,08 ms | 1,2 ms | 50,0 ms | 297,8× |
+| scikit-learn | 0,40 ms | 2,0 ms | 46,9 ms | 317,2× |
 
 ![Benchmark log-log das distâncias](benchmarks/figures/distancias_loglog.png)
 
-Detalhes e conclusões em [notebooks/fase1/06_benchmark_distancias.ipynb](notebooks/fase1/06_benchmark_distancias.ipynb).
+**Conclusões:**
+
+- **Paridade:** as três versões batem com o scikit-learn (`np.allclose`), com diferença máxima na casa de 10⁻¹⁵,
+  causada pelo arredondamento de ponto flutuante em caminhos de cálculo diferentes.
+- **Por que a vetorizada é tão mais rápida:** o loop sai do Python e passa a rodar em C compilado dentro do NumPy,
+  sem o custo do interpretador a cada iteração; a multiplicação de matrizes usa BLAS, que aproveita paralelismo.
+- **Minha versão vence com n pequeno:** o scikit-learn tem um custo fixo de ~0,3 ms por chamada para validar a entrada.
+  Com n grande esse custo some e as duas versões empatam.
+- **O que o scikit-learn faz diferente:** usa a mesma fórmula, mas zera a diagonal quando X e Y são o mesmo array
+  e converte float32 para float64 em blocos, o que evita perda grande de precisão com pontos próximos.
+
+Detalhes em [notebooks/fase1/06_benchmark_distancias.ipynb](notebooks/fase1/06_benchmark_distancias.ipynb).
 
 ## Estrutura
 
