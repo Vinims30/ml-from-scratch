@@ -39,6 +39,6 @@ embaralhamento diferente), testamos propriedades em vez de valores.
 | --- | --- | --- |
 | `test_distances.py` | 22 | Passando |
 | `test_numerics.py` | 23 | Passando |
-| `test_preprocessing.py` | — | Aguardando implementação |
+| `test_preprocessing.py` | 22 | `StandardScaler` e `MinMaxScaler` passando; `OneHotEncoder` aguardando implementação |
 | `test_model_selection.py` | — | Aguardando implementação |
 | `test_metrics.py` | — | Aguardando implementação |
