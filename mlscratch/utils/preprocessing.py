@@ -1,8 +1,6 @@
 """Transformers de pré-processamento (Fase 1, Semana 2, Sessão 3).
 
 A implementar (API fit / transform / fit_transform, atributos com sufixo _):
-- StandardScaler   (mean_, scale_; ddof=0; feature constante -> scale_ = 1)
-- MinMaxScaler
 - OneHotEncoder    (categories_; handle_unknown='error' | 'ignore')
 
 Paridade: sklearn.preprocessing
@@ -46,6 +44,34 @@ class MinMaxScaler:
     def inverse_transform(self, X):
         scale_reverse = (self.data_range_) / (self.b_ - self.a_)
         return self.data_min_ + (np.asarray(X,dtype=float) - self.a_) *scale_reverse
+
+    def fit_transform(self, X):
+        return self.fit(X).transform(X)
+
+class OneHotEncoder:
+    def __init__(self, handle_unknown="error"):
+        self.handle_unknown = handle_unknown
+
+    def fit(self, X):
+        X = np.asarray(X, dtype=object)
+        self.categories_ = [np.unique(X[:, j]) for j in range(X.shape[1])]
+        return self
+
+    def transform(self, X):
+        X = np.asarray(X, dtype=object)
+        blocos = []
+        for j, cats in enumerate(self.categories_):
+            col = X[:, j]      
+            if self.handle_unknown == "error":
+                desconhecidas = ~np.isin(col, cats)
+                if desconhecidas.any():
+                    raise ValueError(
+                        f"Categorias desconhecidas na coluna {j}: "
+                        f"{np.unique(col[desconhecidas])}"
+                    )
+            blocos.append((col[:, None] == cats[None, :]).astype(float))
+
+        return np.hstack(blocos)
 
     def fit_transform(self, X):
         return self.fit(X).transform(X)

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from sklearn import preprocessing as skp
 
-from mlscratch.utils.preprocessing import MinMaxScaler, StandardScaler
+from mlscratch.utils.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
 
 
 @pytest.fixture
@@ -159,3 +159,101 @@ def test_minmax_aceita_lista_e_inteiros():
     meu = MinMaxScaler().fit(X)
     sk = skp.MinMaxScaler().fit(np.array(X, dtype=float))
     assert np.allclose(meu.transform(X), sk.transform(np.array(X, dtype=float)))
+
+
+# ----------------------------------------------------------- OneHotEncoder
+
+
+@pytest.fixture
+def categorias():
+    # Duas colunas com números diferentes de categorias, de tipos diferentes.
+    X_treino = np.array(
+        [["SP", 1], ["RJ", 2], ["SP", 3], ["MG", 1], ["RJ", 2]], dtype=object
+    )
+    X_teste = np.array([["MG", 3], ["SP", 1]], dtype=object)
+    return X_treino, X_teste
+
+
+def sk_encoder(**kwargs):
+    # O sklearn retorna matriz esparsa por padrão; aqui pedimos array normal para comparar.
+    return skp.OneHotEncoder(sparse_output=False, **kwargs)
+
+
+def test_onehot_fit_retorna_self(categorias):
+    X_treino, _ = categorias
+    enc = OneHotEncoder()
+    assert enc.fit(X_treino) is enc
+
+
+def test_onehot_categories_paridade(categorias):
+    X_treino, _ = categorias
+    meu = OneHotEncoder().fit(X_treino)
+    sk = sk_encoder().fit(X_treino)
+    assert len(meu.categories_) == len(sk.categories_)
+    for minhas, delas in zip(meu.categories_, sk.categories_):
+        assert list(minhas) == list(delas)
+
+
+def test_onehot_transform_paridade(categorias):
+    X_treino, X_teste = categorias
+    meu = OneHotEncoder().fit(X_treino)
+    sk = sk_encoder().fit(X_treino)
+    assert np.array_equal(meu.transform(X_treino), sk.transform(X_treino))
+    assert np.array_equal(meu.transform(X_teste), sk.transform(X_teste))
+
+
+def test_onehot_formato_e_um_1_por_coluna_original(categorias):
+    X_treino, _ = categorias
+    Xe = OneHotEncoder().fit_transform(X_treino)
+    # 3 estados + 3 números = 6 colunas
+    assert Xe.shape == (5, 6)
+    assert set(np.unique(Xe)) <= {0.0, 1.0}
+    # Cada linha tem exatamente um 1 em cada bloco: 2 colunas originais -> soma 2
+    assert np.array_equal(Xe.sum(axis=1), np.full(5, 2.0))
+
+
+def test_onehot_fit_transform_igual_fit_depois_transform(categorias):
+    X_treino, _ = categorias
+    a = OneHotEncoder().fit_transform(X_treino)
+    b = OneHotEncoder().fit(X_treino).transform(X_treino)
+    assert np.array_equal(a, b)
+
+
+def test_onehot_categoria_desconhecida_com_error_lanca_valueerror(categorias):
+    X_treino, _ = categorias
+    enc = OneHotEncoder(handle_unknown="error").fit(X_treino)
+    with pytest.raises(ValueError):
+        enc.transform(np.array([["BA", 1]], dtype=object))
+
+
+def test_onehot_error_e_o_padrao(categorias):
+    X_treino, _ = categorias
+    enc = OneHotEncoder().fit(X_treino)
+    with pytest.raises(ValueError):
+        enc.transform(np.array([["SP", 99]], dtype=object))
+
+
+def test_onehot_categoria_desconhecida_com_ignore_vira_zeros(categorias):
+    X_treino, _ = categorias
+    X_novo = np.array([["BA", 1], ["SP", 99]], dtype=object)
+    meu = OneHotEncoder(handle_unknown="ignore").fit(X_treino)
+    sk = sk_encoder(handle_unknown="ignore").fit(X_treino)
+    Xe = meu.transform(X_novo)
+    assert np.array_equal(Xe, sk.transform(X_novo))
+    assert np.array_equal(Xe[0, :3], [0, 0, 0])  # "BA" desconhecido: bloco do estado zerado
+    assert np.array_equal(Xe[1, 3:], [0, 0, 0])  # 99 desconhecido: bloco do número zerado
+
+
+def test_onehot_transform_nao_altera_categorias(categorias):
+    X_treino, _ = categorias
+    enc = OneHotEncoder(handle_unknown="ignore").fit(X_treino)
+    antes = [list(c) for c in enc.categories_]
+    enc.transform(np.array([["BA", 99]], dtype=object))
+    assert [list(c) for c in enc.categories_] == antes
+
+
+def test_onehot_aceita_lista_de_strings():
+    X = [["a", "x"], ["b", "y"], ["a", "y"]]
+    meu = OneHotEncoder().fit(X)
+    sk = sk_encoder().fit(X)
+    assert np.array_equal(meu.transform(X), sk.transform(X))
