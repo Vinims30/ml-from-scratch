@@ -9,9 +9,10 @@ import inspect
 import numpy as np
 import pytest
 from sklearn.model_selection import KFold as SkKFold
+from sklearn.model_selection import StratifiedKFold as SkStratifiedKFold
 from sklearn.model_selection import train_test_split as sk_train_test_split
 
-from mlscratch.utils.model_selection import KFold, train_test_split
+from mlscratch.utils.model_selection import KFold, StratifiedKFold, train_test_split
 
 
 def dados_com_id(n):
@@ -257,3 +258,101 @@ def test_kfold_mais_folds_que_amostras_lanca_erro():
     # Com 5 amostras não dá para fazer 10 folds: alguns ficariam com teste vazio.
     with pytest.raises(ValueError):
         list(KFold(n_splits=10).split(np.arange(5)))
+
+
+# --------------------------------------------------------- StratifiedKFold
+
+
+def contagens_por_fold(folds, y):
+    """Matriz (n_folds, n_classes): quantas amostras de cada classe cada fold tem no teste."""
+    classes = np.unique(y)
+    return np.array([[np.sum(y[te] == c) for c in classes] for _, te in folds])
+
+
+def test_stratified_split_e_um_gerador():
+    y = np.array([0, 1] * 10)
+    assert inspect.isgenerator(StratifiedKFold(n_splits=2).split(np.zeros(20), y))
+
+
+@pytest.mark.parametrize(
+    "proporcoes, k",
+    [([80, 20], 5), ([90, 10], 5), ([50, 30, 20], 4), ([45, 35, 20], 3), ([6, 3], 3), ([13, 7, 4], 4)],
+)
+@pytest.mark.parametrize("shuffle", [False, True])
+def test_stratified_cada_classe_dividida_igualmente_entre_folds(proporcoes, k, shuffle):
+    y = np.repeat(np.arange(len(proporcoes)), proporcoes)
+    folds = list(StratifiedKFold(n_splits=k, shuffle=shuffle, rng=np.random.default_rng(0)).split(np.zeros(len(y)), y))
+    contagens = contagens_por_fold(folds, y)
+    # Cada classe aparece em todos os folds, com diferença de no máximo 1 amostra entre folds.
+    assert (contagens.max(axis=0) - contagens.min(axis=0) <= 1).all()
+
+
+@pytest.mark.parametrize("proporcoes, k", [([80, 20], 5), ([50, 30, 20], 4), ([45, 35, 20], 3), ([13, 7, 4], 4)])
+def test_stratified_contagens_por_classe_iguais_ao_sklearn(proporcoes, k):
+    # Os índices diferem, mas quantas amostras de cada classe vão para cada fold tem que bater
+    # (comparando as contagens ordenadas, porque a ordem dos folds pode ser outra).
+    y = np.repeat(np.arange(len(proporcoes)), proporcoes)
+    X = np.zeros(len(y))
+    meus = contagens_por_fold(list(StratifiedKFold(n_splits=k).split(X, y)), y)
+    deles = contagens_por_fold(list(SkStratifiedKFold(n_splits=k).split(X, y)), y)
+    assert np.array_equal(np.sort(meus, axis=0), np.sort(deles, axis=0))
+
+
+def test_stratified_tamanhos_diferem_em_no_maximo_1():
+    y = np.repeat([0, 1, 2], [13, 7, 4])
+    tamanhos = [len(te) for _, te in StratifiedKFold(n_splits=4).split(np.zeros(len(y)), y)]
+    assert max(tamanhos) - min(tamanhos) <= 1
+
+
+@pytest.mark.parametrize("shuffle", [False, True])
+def test_stratified_cada_indice_no_teste_exatamente_uma_vez(shuffle):
+    y = np.repeat([0, 1, 2], [13, 7, 4])
+    n = len(y)
+    folds = list(StratifiedKFold(n_splits=4, shuffle=shuffle, rng=np.random.default_rng(0)).split(np.zeros(n), y))
+    assert np.array_equal(np.sort(np.concatenate([te for _, te in folds])), np.arange(n))
+    for tr, te in folds:
+        assert set(tr).isdisjoint(te)
+        assert set(tr) | set(te) == set(range(n))
+
+
+def test_stratified_resolve_o_problema_do_kfold_com_dados_ordenados():
+    # Dados ordenados por classe (comum em datasets reais): o KFold sem shuffle
+    # gera folds sem nenhum exemplo da classe minoritária; o estratificado não.
+    y = np.array([0] * 90 + [1] * 10)
+    X = np.zeros(100)
+    minoritaria_kfold = [np.sum(y[te] == 1) for _, te in KFold(n_splits=5).split(X)]
+    minoritaria_strat = [np.sum(y[te] == 1) for _, te in StratifiedKFold(n_splits=5).split(X, y)]
+    assert 0 in minoritaria_kfold
+    assert minoritaria_strat == [2, 2, 2, 2, 2]
+
+
+def test_stratified_shuffle_embaralha_e_mesmo_rng_reproduz():
+    y = np.repeat([0, 1], [30, 15])
+    X = np.zeros(len(y))
+    sem = [te for _, te in StratifiedKFold(n_splits=3).split(X, y)]
+    a = [te for _, te in StratifiedKFold(n_splits=3, shuffle=True, rng=np.random.default_rng(42)).split(X, y)]
+    b = [te for _, te in StratifiedKFold(n_splits=3, shuffle=True, rng=np.random.default_rng(42)).split(X, y)]
+    assert not all(np.array_equal(x, z) for x, z in zip(sem, a))
+    assert all(np.array_equal(x, z) for x, z in zip(a, b))
+
+
+def test_stratified_aceita_rotulos_de_texto():
+    y = np.array(["sim"] * 12 + ["nao"] * 6)
+    folds = list(StratifiedKFold(n_splits=3).split(np.zeros(len(y)), y))
+    for _, te in folds:
+        assert np.sum(y[te] == "sim") == 4
+        assert np.sum(y[te] == "nao") == 2
+
+
+def test_stratified_get_n_splits():
+    assert StratifiedKFold(n_splits=4).get_n_splits() == 4
+
+
+def test_stratified_n_splits_menor_que_2_lanca_erro():
+    with pytest.raises(ValueError):
+        StratifiedKFold(n_splits=1)
+
+
+def test_stratified_mais_folds_que_amostras_lanca_erro():
+    with pytest.raises(ValueError):
+        list(StratifiedKFold(n_splits=10).split(np.zeros(5), np.array([0, 1, 0, 1, 0])))

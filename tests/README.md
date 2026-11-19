@@ -40,5 +40,5 @@ embaralhamento diferente), testamos propriedades em vez de valores.
 | `test_distances.py` | 22 | Passando |
 | `test_numerics.py` | 23 | Passando |
 | `test_preprocessing.py` | 32 | Passando |
-| `test_model_selection.py` | 43 | `train_test_split`: 20 passando, 1 falha esperada (`xfail`: arredondamento no estratificado com classes pequenas); `KFold`: 22 passando; `StratifiedKFold` aguardando implementação |
+| `test_model_selection.py` | 69 | Passando (1 falha esperada, `xfail`: arredondamento no `train_test_split` estratificado com classes pequenas) |
 | `test_metrics.py` | — | Aguardando implementação |

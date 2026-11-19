@@ -30,7 +30,7 @@ Toda implementação é comparada em quatro pontos:
 - [x] Distâncias euclidianas par-a-par (dois loops, um loop, vetorizada) + testes + benchmark
 - [x] Funções numericamente estáveis (softmax, log-softmax, log-sum-exp, sigmoid) + testes
 - [x] Pré-processamento (`StandardScaler`, `MinMaxScaler`, `OneHotEncoder`) + testes
-- [ ] Divisão de dados (`train_test_split`, `KFold`, `StratifiedKFold`)
+- [x] Divisão de dados (`train_test_split`, `KFold`, `StratifiedKFold`) + testes
 - [ ] Métricas de regressão e classificação (incluindo log loss e ROC-AUC)
 
 ## Instalação
