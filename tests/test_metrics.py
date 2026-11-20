@@ -171,3 +171,165 @@ def test_confusion_y_pred_em_coluna():
 def test_confusion_tamanhos_diferentes_lanca_erro(y_pred):
     with pytest.raises(ValueError):
         m.confusion_matrix([0, 1, 0], y_pred)
+
+
+# ---------------------------------------------------------------- Accuracy
+
+# Exemplos com valores calculados à mão (e conferidos com o sklearn).
+BIN_TRUE = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1]
+BIN_PRED = [0, 0, 0, 0, 1, 1, 1, 1, 1, 0]   # VP=3, FP=2, FN=1, VN=4
+MC_TRUE = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2]
+MC_PRED = [0, 0, 0, 1, 1, 2, 2, 2, 0, 0]
+
+
+def test_accuracy_exemplos():
+    assert np.isclose(m.accuracy_score(BIN_TRUE, BIN_PRED), 0.7)
+    assert np.isclose(m.accuracy_score(MC_TRUE, MC_PRED), 0.5)
+
+
+@pytest.mark.parametrize("k", [2, 3, 10])
+def test_accuracy_paridade_com_sklearn(k):
+    rng = np.random.default_rng(k)
+    y_true = rng.integers(0, k, 300)
+    y_pred = np.where(rng.random(300) < 0.6, y_true, rng.integers(0, k, 300))
+    assert np.isclose(m.accuracy_score(y_true, y_pred), skm.accuracy_score(y_true, y_pred))
+
+
+def test_accuracy_perfeita_zero_e_texto():
+    assert m.accuracy_score([1, 2, 3], [1, 2, 3]) == 1.0
+    assert m.accuracy_score([0, 0, 1], [1, 1, 0]) == 0.0
+    assert np.isclose(m.accuracy_score(["a", "b", "a"], ["a", "a", "a"]), 2 / 3)
+
+
+# --------------------------------------------- Precision, recall e F1
+
+PRF = [
+    (m.precision_score, skm.precision_score),
+    (m.recall_score, skm.recall_score),
+    (m.f1_score, skm.f1_score),
+]
+IDS_PRF = ["precision", "recall", "f1"]
+
+
+def sk_sem_aviso(funcao, *args, **kwargs):
+    # O sklearn emite UndefinedMetricWarning nos casos 0/0; aqui só queremos o valor.
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return funcao(*args, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "minha, esperado",
+    [(m.precision_score, 0.6), (m.recall_score, 0.75), (m.f1_score, 2 * 0.6 * 0.75 / 1.35)],
+    ids=IDS_PRF,
+)
+def test_binario_exemplo_calculado_a_mao(minha, esperado):
+    assert np.isclose(minha(BIN_TRUE, BIN_PRED), esperado)
+
+
+@pytest.mark.parametrize(
+    "minha, por_classe",
+    [
+        (m.precision_score, [0.6, 0.5, 1 / 3]),
+        (m.recall_score, [0.75, 1 / 3, 1 / 3]),
+        (m.f1_score, [2 / 3, 0.4, 1 / 3]),
+    ],
+    ids=IDS_PRF,
+)
+def test_multiclasse_exemplo_calculado_a_mao(minha, por_classe):
+    assert np.allclose(minha(MC_TRUE, MC_PRED, average=None), por_classe)
+    assert np.isclose(minha(MC_TRUE, MC_PRED, average="macro"), np.mean(por_classe))
+
+
+def test_f1_macro_e_media_dos_f1_nao_f1_das_medias():
+    # Armadilha comum: calcular o F1 a partir da precision macro e do recall macro.
+    p = m.precision_score(MC_TRUE, MC_PRED, average="macro")
+    r = m.recall_score(MC_TRUE, MC_PRED, average="macro")
+    f1_das_medias = 2 * p * r / (p + r)                       # ~0.4750 (errado)
+    f1_macro = m.f1_score(MC_TRUE, MC_PRED, average="macro")  # ~0.4667 (certo)
+    assert np.isclose(f1_macro, skm.f1_score(MC_TRUE, MC_PRED, average="macro"))
+    assert not np.isclose(f1_macro, f1_das_medias)
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_binario_paridade_com_sklearn(minha, sk, seed):
+    rng = np.random.default_rng(seed)
+    y_true = rng.integers(0, 2, 200)
+    y_pred = np.where(rng.random(200) < 0.7, y_true, 1 - y_true)
+    assert np.isclose(minha(y_true, y_pred), sk(y_true, y_pred))
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+@pytest.mark.parametrize("k", [3, 5])
+def test_macro_e_none_paridade_com_sklearn(minha, sk, k):
+    rng = np.random.default_rng(k)
+    y_true = rng.integers(0, k, 300)
+    y_pred = np.where(rng.random(300) < 0.6, y_true, rng.integers(0, k, 300))
+    assert np.isclose(minha(y_true, y_pred, average="macro"), sk(y_true, y_pred, average="macro"))
+    assert np.allclose(minha(y_true, y_pred, average=None), sk(y_true, y_pred, average=None))
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_binario_e_macro_devolvem_numero(minha, sk):
+    assert np.ndim(minha(BIN_TRUE, BIN_PRED)) == 0
+    assert np.ndim(minha(MC_TRUE, MC_PRED, average="macro")) == 0
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_pos_label_zero(minha, sk):
+    # Tratar a classe 0 como positiva.
+    assert np.isclose(minha(BIN_TRUE, BIN_PRED, pos_label=0), sk(BIN_TRUE, BIN_PRED, pos_label=0))
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_rotulos_de_texto_com_pos_label(minha, sk):
+    y_true = ["fraude", "normal", "normal", "fraude", "normal"]
+    y_pred = ["fraude", "fraude", "normal", "normal", "normal"]
+    assert np.isclose(minha(y_true, y_pred, pos_label="fraude"), sk(y_true, y_pred, pos_label="fraude"))
+
+
+@pytest.mark.filterwarnings("error::RuntimeWarning")  # divisão por zero vira falha
+@pytest.mark.parametrize("zero_division", [0, 1])
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+@pytest.mark.parametrize(
+    "y_true, y_pred",
+    [
+        ([0, 1, 0, 1], [0, 0, 0, 0]),   # classe 1 nunca prevista: precision 0/0
+        ([0, 0, 0, 0], [0, 1, 0, 1]),   # classe 1 nunca real: recall 0/0
+        ([0, 0, 0], [0, 0, 0]),         # só a classe 0 aparece: pos_label=1 ausente
+    ],
+    ids=["nunca_prevista", "nunca_real", "so_classe_0"],
+)
+def test_zero_division(minha, sk, y_true, y_pred, zero_division):
+    meu = minha(y_true, y_pred, zero_division=zero_division)
+    assert np.isclose(meu, sk_sem_aviso(sk, y_true, y_pred, zero_division=zero_division))
+
+
+@pytest.mark.filterwarnings("error::RuntimeWarning")
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_zero_division_no_macro(minha, sk):
+    y_true, y_pred = [0, 1, 2, 0], [0, 0, 0, 0]   # classes 1 e 2 nunca previstas
+    for zd in [0, 1]:
+        meu = minha(y_true, y_pred, average="macro", zero_division=zd)
+        assert np.isclose(meu, sk_sem_aviso(sk, y_true, y_pred, average="macro", zero_division=zd))
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_binary_com_3_classes_lanca_erro(minha, sk):
+    with pytest.raises(ValueError):
+        minha(MC_TRUE, MC_PRED)
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_texto_sem_pos_label_lanca_erro(minha, sk):
+    with pytest.raises(ValueError):
+        minha(["sim", "nao", "sim"], ["sim", "sim", "nao"])
+
+
+@pytest.mark.parametrize("minha, sk", PRF, ids=IDS_PRF)
+def test_average_invalido_lanca_erro(minha, sk):
+    with pytest.raises(ValueError):
+        minha(BIN_TRUE, BIN_PRED, average="media")
