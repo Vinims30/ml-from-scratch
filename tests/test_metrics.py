@@ -333,3 +333,110 @@ def test_texto_sem_pos_label_lanca_erro(minha, sk):
 def test_average_invalido_lanca_erro(minha, sk):
     with pytest.raises(ValueError):
         minha(BIN_TRUE, BIN_PRED, average="media")
+
+
+# ---------------------------------------------------------------- Log loss
+
+
+def test_log_loss_valor_calculado_a_mao():
+    # Classe 1 com p=0.8 -> -log(0.8); classe 0 com p=0.3 -> -log(1 - 0.3)
+    esperado = -(np.log(0.8) + np.log(0.7)) / 2
+    assert np.isclose(m.log_loss([1, 0], [0.8, 0.3]), esperado)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_log_loss_paridade_com_sklearn(seed):
+    rng = np.random.default_rng(seed)
+    y_true = rng.integers(0, 2, 200)
+    y_proba = np.clip(y_true * 0.6 + rng.random(200) * 0.4, 0.01, 0.99)
+    assert np.isclose(m.log_loss(y_true, y_proba), skm.log_loss(y_true, y_proba))
+
+
+def test_log_loss_chute_de_50_porcento_da_log_2():
+    # Sem informação nenhuma (p = 0.5 sempre), a log loss é log(2) ~ 0.693.
+    assert np.isclose(m.log_loss([0, 1, 1, 0], [0.5] * 4), np.log(2))
+
+
+def test_log_loss_previsao_perfeita_quase_zero():
+    assert np.isclose(m.log_loss([1, 0, 1], [1.0, 0.0, 1.0]), 0.0, atol=1e-12)
+
+
+def test_log_loss_confiante_e_errado_e_pior_que_inseguro():
+    # A log loss pune muito mais quem erra com certeza.
+    assert m.log_loss([1], [0.01]) > m.log_loss([1], [0.4]) > m.log_loss([1], [0.9])
+
+
+@pytest.mark.filterwarnings("error::RuntimeWarning")  # log(0) vira falha
+def test_log_loss_probabilidades_0_e_1_sem_log_de_zero():
+    # Sem o clip, log(0) = -inf. Com o clip, o resultado é grande mas finito.
+    valor = m.log_loss([1, 0], [0.0, 1.0])
+    assert np.isfinite(valor)
+    assert valor > 10
+
+
+def test_log_loss_aceita_listas_e_coluna():
+    y_true, y_proba = [1, 0, 1, 1, 0], [0.9, 0.2, 0.6, 0.8, 0.1]
+    esperado = skm.log_loss(y_true, y_proba)
+    assert np.isclose(m.log_loss(y_true, y_proba), esperado)
+    assert np.isclose(m.log_loss(y_true, np.array(y_proba).reshape(-1, 1)), esperado)
+
+
+def test_log_loss_tamanhos_diferentes_lanca_erro():
+    with pytest.raises(ValueError):
+        m.log_loss([1, 0, 1], [0.5])
+
+
+def test_log_loss_binario_com_duas_colunas():
+    # predict_proba devolve shape (n, 2): [P(classe 0), P(classe 1)] em cada linha.
+    y_true = [1, 0, 1, 1, 0]
+    p1 = np.array([0.9, 0.2, 0.6, 0.8, 0.1])
+    y_proba = np.column_stack([1 - p1, p1])
+    assert np.isclose(m.log_loss(y_true, y_proba), skm.log_loss(y_true, y_proba))
+
+
+def test_log_loss_multiclasse():
+    y_true = [0, 1, 2, 2]
+    y_proba = np.array([[0.7, 0.2, 0.1], [0.1, 0.8, 0.1], [0.2, 0.2, 0.6], [0.3, 0.3, 0.4]])
+    assert np.isclose(m.log_loss(y_true, y_proba), skm.log_loss(y_true, y_proba))
+
+
+def test_log_loss_multiclasse_valor_calculado_a_mao():
+    # Probabilidades da classe certa em cada linha: 0.7, 0.8, 0.6 e 0.4.
+    y_true = [0, 1, 2, 2]
+    y_proba = [[0.7, 0.2, 0.1], [0.1, 0.8, 0.1], [0.2, 0.2, 0.6], [0.3, 0.3, 0.4]]
+    esperado = -np.mean(np.log([0.7, 0.8, 0.6, 0.4]))
+    assert np.isclose(m.log_loss(y_true, y_proba), esperado)
+
+
+def test_log_loss_multiclasse_rotulos_de_texto():
+    # As colunas seguem a ordem das classes: "baixo", "medio", "alto" -> ordem alfabética.
+    y_true = ["medio", "alto", "baixo"]
+    y_proba = [[0.1, 0.2, 0.7], [0.6, 0.3, 0.1], [0.2, 0.7, 0.1]]  # colunas: alto, baixo, medio
+    assert np.isclose(m.log_loss(y_true, y_proba), skm.log_loss(y_true, y_proba))
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+def test_log_loss_multiclasse_paridade_com_sklearn(seed):
+    from mlscratch.utils.numerics import softmax
+
+    rng = np.random.default_rng(seed)
+    y_true = rng.integers(0, 4, 100)
+    y_proba = softmax(rng.normal(size=(100, 4)) * 2)  # probabilidades válidas, somando 1
+    assert np.isclose(m.log_loss(y_true, y_proba), skm.log_loss(y_true, y_proba))
+
+
+def test_log_loss_um_e_dois_formatos_dao_o_mesmo_resultado():
+    y_true = [1, 0, 1, 1, 0]
+    p1 = np.array([0.9, 0.2, 0.6, 0.8, 0.1])
+    assert np.isclose(m.log_loss(y_true, p1), m.log_loss(y_true, np.column_stack([1 - p1, p1])))
+
+
+@pytest.mark.filterwarnings("error::RuntimeWarning")
+def test_log_loss_multiclasse_probabilidade_zero_sem_log_de_zero():
+    valor = m.log_loss([0, 1], [[0.0, 1.0], [1.0, 0.0]])  # 100% de certeza na classe errada
+    assert np.isfinite(valor) and valor > 10
+
+
+def test_log_loss_numero_de_colunas_errado_lanca_erro():
+    with pytest.raises(ValueError):
+        m.log_loss([0, 1, 2], [[0.5, 0.5], [0.3, 0.7], [0.1, 0.9]])  # 3 classes, 2 colunas

@@ -151,3 +151,45 @@ def f1_score(y_true, y_pred, average = "binary", pos_label = 1, zero_division = 
 
     return _aplicar_average(f1, classes, average, pos_label, zero_division)
 
+def log_loss(y_true, y_proba):
+    """Log loss (entropia cruzada) a partir das probabilidades previstas.
+
+    y_proba pode vir em dois formatos:
+    - 1D, shape (n,): probabilidade da classe 1 (caso binário, rótulos 0 e 1);
+    - 2D, shape (n, k): uma coluna por classe, como devolve o predict_proba.
+      A coluna j corresponde à j-ésima classe de y_true em ordem crescente.
+
+    Em todos os casos a conta é a mesma: pegar, em cada linha, a probabilidade
+    que o modelo deu para a classe CERTA e fazer -média(log(...)).
+    """
+    eps = 1e-15
+    y_true = np.asarray(y_true).ravel()
+    y_proba = np.asarray(y_proba, dtype=float)
+
+    # Uma coluna só (n, 1) é o mesmo que o formato 1D.
+    if y_proba.ndim == 2 and y_proba.shape[1] == 1:
+        y_proba = y_proba.ravel()
+
+    if len(y_true) != len(y_proba):
+        raise ValueError(
+            f"y_true e y_proba precisam ter o mesmo número de amostras: "
+            f"y_true tem {len(y_true)}, y_proba tem {len(y_proba)}."
+        )
+
+    # Formato 1D (binário): a fórmula original, com y_true em 0 e 1.
+    if y_proba.ndim == 1:
+        p = np.clip(y_proba, eps, 1 - eps)
+        return -np.mean((1 - y_true) * np.log(1 - p) + y_true * np.log(p))
+
+    # Formato 2D: cada rótulo vira a posição da sua coluna (0, 1, ..., k-1).
+    classes, coluna_certa = np.unique(y_true, return_inverse=True)
+    if y_proba.shape[1] != len(classes):
+        raise ValueError(
+            f"y_proba tem {y_proba.shape[1]} colunas, mas y_true tem {len(classes)} "
+            f"classes: {classes.tolist()}."
+        )
+
+    p = np.clip(y_proba, eps, 1 - eps)
+    # Para cada linha i, a probabilidade da classe certa: p[i, coluna_certa[i]].
+    p_classe_certa = p[np.arange(len(y_true)), coluna_certa]
+    return -np.mean(np.log(p_classe_certa))
