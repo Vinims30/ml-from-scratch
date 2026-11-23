@@ -1,5 +1,7 @@
 # ml-from-scratch
 
+[![tests](https://github.com/Vinims30/ml-from-scratch/actions/workflows/tests.yml/badge.svg)](https://github.com/Vinims30/ml-from-scratch/actions/workflows/tests.yml)
+
 Algoritmos de Machine Learning implementados do zero em NumPy, com API no estilo
 scikit-learn (`fit`, `predict`, `predict_proba`), e comparados com as bibliotecas
 de referência (scikit-learn e, mais tarde, PyTorch).
