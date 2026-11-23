@@ -31,7 +31,7 @@ Toda implementação é comparada em quatro pontos:
 - [x] Funções numericamente estáveis (softmax, log-softmax, log-sum-exp, sigmoid) + testes
 - [x] Pré-processamento (`StandardScaler`, `MinMaxScaler`, `OneHotEncoder`) + testes
 - [x] Divisão de dados (`train_test_split`, `KFold`, `StratifiedKFold`) + testes
-- [ ] Métricas: regressão, matriz de confusão, accuracy, precision, recall e F1 prontos; faltam log loss e ROC-AUC
+- [x] Métricas de regressão e classificação (incluindo log loss e ROC-AUC) + testes
 
 ## Instalação
 

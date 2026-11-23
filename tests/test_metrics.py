@@ -440,3 +440,106 @@ def test_log_loss_multiclasse_probabilidade_zero_sem_log_de_zero():
 def test_log_loss_numero_de_colunas_errado_lanca_erro():
     with pytest.raises(ValueError):
         m.log_loss([0, 1, 2], [[0.5, 0.5], [0.3, 0.7], [0.1, 0.9]])  # 3 classes, 2 colunas
+
+
+# ----------------------------------------------------------------- ROC-AUC
+
+METODOS_AUC = ["ranks", "curva"]
+
+
+def test_ranks_medios_com_empates():
+    from mlscratch.utils.metrics import _ranks_medios
+
+    assert np.array_equal(_ranks_medios([10, 20, 20, 30]), [1, 2.5, 2.5, 4])
+    assert np.array_equal(_ranks_medios([5, 5, 5]), [2, 2, 2])
+    assert np.array_equal(_ranks_medios([3, 1, 2]), [3, 1, 2])
+
+
+def test_auc_trapezio_valor_conhecido():
+    assert np.isclose(m.auc([0, 1], [0, 1]), 0.5)           # diagonal
+    assert np.isclose(m.auc([0, 0, 1], [0, 1, 1]), 1.0)     # canto superior esquerdo
+    assert np.isclose(m.auc([0, 0.5, 1], [0, 1, 1]), 0.75)  # trapézio + retângulo
+
+
+@pytest.mark.parametrize("metodo", METODOS_AUC)
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_roc_auc_paridade_com_sklearn(metodo, seed):
+    rng = np.random.default_rng(seed)
+    y = rng.integers(0, 2, 300)
+    s = y * 0.5 + rng.normal(size=300)  # scores informativos, sem empates
+    assert np.isclose(m.roc_auc_score(y, s, metodo=metodo), skm.roc_auc_score(y, s))
+
+
+@pytest.mark.parametrize("metodo", METODOS_AUC)
+def test_roc_auc_with_ties(metodo):
+    # O teste do roteiro: muitos empates de propósito.
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 500)
+    s = rng.integers(0, 10, 500) / 10
+    assert np.isclose(m.roc_auc_score(y, s, metodo=metodo), skm.roc_auc_score(y, s))
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_roc_auc_duas_formas_batem(seed):
+    rng = np.random.default_rng(seed)
+    y = rng.integers(0, 2, 200)
+    s = rng.integers(0, 5, 200) + y  # empates e sinal
+    assert np.isclose(m.roc_auc_score(y, s, metodo="ranks"), m.roc_auc_score(y, s, metodo="curva"))
+
+
+@pytest.mark.parametrize("metodo", METODOS_AUC)
+def test_roc_auc_casos_extremos(metodo):
+    y = [0, 0, 1, 1]
+    assert m.roc_auc_score(y, [0.1, 0.2, 0.8, 0.9], metodo=metodo) == 1.0   # separa perfeitamente
+    assert m.roc_auc_score(y, [0.9, 0.8, 0.2, 0.1], metodo=metodo) == 0.0   # ao contrário
+    assert m.roc_auc_score(y, [0.5, 0.5, 0.5, 0.5], metodo=metodo) == 0.5   # tudo empatado
+
+
+@pytest.mark.parametrize("metodo", METODOS_AUC)
+def test_roc_auc_so_depende_da_ordem_dos_scores(metodo):
+    # Qualquer transformação crescente (log, exp, multiplicar por 10) não muda a AUC.
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.random(100) + y * 0.3
+    base = m.roc_auc_score(y, s, metodo=metodo)
+    assert np.isclose(m.roc_auc_score(y, np.exp(s), metodo=metodo), base)
+    assert np.isclose(m.roc_auc_score(y, 10 * s - 3, metodo=metodo), base)
+
+
+@pytest.mark.parametrize("metodo", METODOS_AUC)
+@pytest.mark.parametrize(
+    "y", [["nao", "sim", "sim", "nao"], [-1, 1, 1, -1]], ids=["texto", "menos1_e_1"]
+)
+def test_roc_auc_outros_rotulos(metodo, y):
+    s = [0.2, 0.7, 0.4, 0.5]
+    assert np.isclose(m.roc_auc_score(y, s, metodo=metodo), skm.roc_auc_score(y, s))
+
+
+@pytest.mark.parametrize("metodo", METODOS_AUC)
+def test_roc_auc_uma_classe_so_lanca_erro(metodo):
+    with pytest.raises(ValueError):
+        m.roc_auc_score([1, 1, 1], [0.2, 0.5, 0.9], metodo=metodo)
+
+
+def test_roc_auc_metodo_invalido_lanca_erro():
+    with pytest.raises(ValueError):
+        m.roc_auc_score([0, 1], [0.2, 0.8], metodo="integral")
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+def test_roc_curve_paridade_com_sklearn(seed):
+    rng = np.random.default_rng(seed)
+    y = rng.integers(0, 2, 100)
+    s = rng.integers(0, 8, 100) / 8  # com empates
+    fpr, tpr, thr = m.roc_curve(y, s)
+    sk_fpr, sk_tpr, sk_thr = skm.roc_curve(y, s, drop_intermediate=False)
+    assert np.allclose(fpr, sk_fpr)
+    assert np.allclose(tpr, sk_tpr)
+    assert np.array_equal(thr, sk_thr)
+
+
+def test_roc_curve_comeca_em_0_e_termina_em_1():
+    fpr, tpr, _ = m.roc_curve([0, 1, 0, 1, 1], [0.1, 0.4, 0.35, 0.8, 0.6])
+    assert (fpr[0], tpr[0]) == (0.0, 0.0)
+    assert (fpr[-1], tpr[-1]) == (1.0, 1.0)
+    assert np.all(np.diff(fpr) >= 0) and np.all(np.diff(tpr) >= 0)  # nunca desce

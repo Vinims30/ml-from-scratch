@@ -7,6 +7,7 @@ Classificação:
 - confusion_matrix  (via np.bincount)
 - accuracy_score, precision_score, recall_score, f1_score  (binário e macro; zero_division)
 - log_loss          (clip em [eps, 1 - eps])
+- roc_curve, auc    (curva ROC e área pela regra do trapézio)
 - roc_auc_score     (pela curva/trapézio e por ranks/Mann-Whitney, com empates)
 
 Paridade: sklearn.metrics
@@ -152,21 +153,10 @@ def f1_score(y_true, y_pred, average = "binary", pos_label = 1, zero_division = 
     return _aplicar_average(f1, classes, average, pos_label, zero_division)
 
 def log_loss(y_true, y_proba):
-    """Log loss (entropia cruzada) a partir das probabilidades previstas.
-
-    y_proba pode vir em dois formatos:
-    - 1D, shape (n,): probabilidade da classe 1 (caso binário, rótulos 0 e 1);
-    - 2D, shape (n, k): uma coluna por classe, como devolve o predict_proba.
-      A coluna j corresponde à j-ésima classe de y_true em ordem crescente.
-
-    Em todos os casos a conta é a mesma: pegar, em cada linha, a probabilidade
-    que o modelo deu para a classe CERTA e fazer -média(log(...)).
-    """
     eps = 1e-15
     y_true = np.asarray(y_true).ravel()
     y_proba = np.asarray(y_proba, dtype=float)
 
-    # Uma coluna só (n, 1) é o mesmo que o formato 1D.
     if y_proba.ndim == 2 and y_proba.shape[1] == 1:
         y_proba = y_proba.ravel()
 
@@ -176,12 +166,12 @@ def log_loss(y_true, y_proba):
             f"y_true tem {len(y_true)}, y_proba tem {len(y_proba)}."
         )
 
-    # Formato 1D (binário): a fórmula original, com y_true em 0 e 1.
+    # Formato 1D (binário)
     if y_proba.ndim == 1:
         p = np.clip(y_proba, eps, 1 - eps)
         return -np.mean((1 - y_true) * np.log(1 - p) + y_true * np.log(p))
 
-    # Formato 2D: cada rótulo vira a posição da sua coluna (0, 1, ..., k-1).
+    # Formato 2D:
     classes, coluna_certa = np.unique(y_true, return_inverse=True)
     if y_proba.shape[1] != len(classes):
         raise ValueError(
@@ -190,6 +180,73 @@ def log_loss(y_true, y_proba):
         )
 
     p = np.clip(y_proba, eps, 1 - eps)
-    # Para cada linha i, a probabilidade da classe certa: p[i, coluna_certa[i]].
+    # Para cada linha i, a probabilidade da classe certa: p[i, coluna_certa[i]]
     p_classe_certa = p[np.arange(len(y_true)), coluna_certa]
     return -np.mean(np.log(p_classe_certa))
+
+
+def _positivos_binarios(y_true):
+    classes = np.unique(y_true)
+    if len(classes) != 2:
+        raise ValueError(
+            f"A ROC-AUC precisa de exatamente 2 classes em y_true, "
+            f"mas foram encontradas {len(classes)}: {classes.tolist()}."
+        )
+    return (y_true == classes[1]).astype(int)
+
+
+def roc_curve(y_true, y_score):
+    y_true, y_score = _validar(y_true, y_score)
+    y_score = y_score.astype(float)
+    positivo = _positivos_binarios(y_true)
+
+    ordem = np.argsort(-y_score, kind="mergesort")
+    scores = y_score[ordem]
+    positivo = positivo[ordem]
+
+    fim_do_grupo = np.r_[np.where(np.diff(scores) != 0)[0], len(scores) - 1]
+
+    vp = np.cumsum(positivo)[fim_do_grupo] 
+    fp = (fim_do_grupo + 1) - vp         
+
+    vp = np.r_[0, vp]
+    fp = np.r_[0, fp]
+    thresholds = np.r_[np.inf, scores[fim_do_grupo]]
+
+    tpr = vp / vp[-1]  
+    fpr = fp / fp[-1]  
+    return fpr, tpr, thresholds
+
+def auc(x, y):
+    """Área sob uma curva pela regra do trapézio (x crescente)."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    larguras = x[1:] - x[:-1]
+    alturas_medias = (y[1:] + y[:-1]) / 2
+    return float(np.sum(larguras * alturas_medias))
+
+
+def _ranks_medios(valores):
+    unicos, grupo, contagem = np.unique(valores, return_inverse=True, return_counts=True)
+    inicio = np.cumsum(contagem) - contagem
+    rank_medio_do_grupo = inicio + (contagem + 1) / 2
+    return rank_medio_do_grupo[grupo]
+
+
+def roc_auc_score(y_true, y_score, metodo="ranks"):
+    if metodo == "curva":
+        fpr, tpr, _ = roc_curve(y_true, y_score)
+        return auc(fpr, tpr)
+
+    if metodo != "ranks":
+        raise ValueError(f"metodo deve ser 'ranks' ou 'curva', recebeu {metodo!r}.")
+
+    y_true, y_score = _validar(y_true, y_score)
+    positivo = _positivos_binarios(y_true)
+    n_pos = positivo.sum()
+    n_neg = len(positivo) - n_pos
+
+    ranks = _ranks_medios(y_score.astype(float))
+    soma_ranks_positivos = ranks[positivo == 1].sum()
+    return float((soma_ranks_positivos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+

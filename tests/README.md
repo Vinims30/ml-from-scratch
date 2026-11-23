@@ -41,4 +41,4 @@ embaralhamento diferente), testamos propriedades em vez de valores.
 | `test_numerics.py` | 23 | Passando |
 | `test_preprocessing.py` | 32 | Passando |
 | `test_model_selection.py` | 69 | Passando (1 falha esperada, `xfail`: arredondamento no `train_test_split` estratificado com classes pequenas) |
-| `test_metrics.py` | 123 | Regressão, matriz de confusão, accuracy, precision, recall, F1 e log loss (binária e multiclasse) passando; ROC-AUC aguardando implementação |
+| `test_metrics.py` | 152 | Passando |
